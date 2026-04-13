@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.local
+public/model/*.onnx
+public/model/*.wasm
+public/model/tf/
+.idea
