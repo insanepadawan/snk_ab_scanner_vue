@@ -1,0 +1,29 @@
+description: Ultralytics best model trained on dataset_custom.yaml
+author: Ultralytics
+date: '2026-04-12T06:53:04.745910'
+version: 8.4.37
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: corner
+  1: foooul
+  2: goaaaal
+  3: handball
+  4: offside
+  5: own_goal
+  6: penalty
+  7: red_card
+  8: vaaaar
+args:
+  batch: 1
+  half: false
+  int8: false
+  nms: false
+channels: 3
+end2end: false
