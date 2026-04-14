@@ -588,6 +588,15 @@ export default {
 
       const video = this.$refs.videoRef
       const canvas = this.$refs.canvasRef
+
+      const resizeCanvas = () => {
+        canvas.width  = 960
+        canvas.height = 960
+        canvas.style.width  = video.offsetWidth  + 'px'
+        canvas.style.height = video.offsetHeight + 'px'
+      }
+      resizeCanvas()
+
       const frameInterval = 1000 / 2
       let lastFrameTime = 0
       let predictedCount = {}
@@ -674,7 +683,13 @@ export default {
         this.closeMedia()
         await nextTick()
 
-        const constraints = { video: { facingMode: { ideal: 'environment' } } }
+        const constraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width:  { ideal: 960 },
+            height: { ideal: 960 },
+          }
+        }
         await new Promise(r => setTimeout(r, 300))
         this.videoStream = await navigator.mediaDevices.getUserMedia(constraints)
         this.useWebcam = true
@@ -918,9 +933,14 @@ export default {
 .feed {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 960px;
+  height: 960px;
+  max-height: 100%;
+  max-width: 100%;
   object-fit: cover;
+  left: 50%;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%);
 }
 
 .canvas-overlay {
