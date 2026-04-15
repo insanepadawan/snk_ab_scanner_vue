@@ -954,6 +954,7 @@ export default {
   border-left: 1px solid var(--border);
   z-index: 50;
   overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .slide-enter-active,
@@ -1003,6 +1004,10 @@ export default {
 .bracket--bl { bottom: 80px; left: 16px;   border-bottom: 2px solid var(--accent); border-left: 2px solid var(--accent); }
 .bracket--br { bottom: 80px; right: 16px;  border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
+.bracket--bl,
+.bracket--br {
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
 /* ── Detection badge ──────────────────────────────────────────────────── */
 .detection-badge {
   position: absolute;
@@ -1044,6 +1049,7 @@ export default {
 .controls {
   position: absolute;
   bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px)); /* Safari home bar */
   left: 50%;
   transform: translateX(-50%);
   display: flex;
