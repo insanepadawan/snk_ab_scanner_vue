@@ -879,7 +879,9 @@ export default {
 .scan-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;                                    /* ← replaces 100vh */
+  padding-bottom: env(safe-area-inset-bottom, 0px);  /* ← shrinks away from home bar */
+  box-sizing: border-box;                            /* ← so padding doesn't overflow */
   width: 100vw;
   overflow: hidden;
   background: var(--bg);
@@ -1048,8 +1050,7 @@ export default {
 /* ── Controls ─────────────────────────────────────────────────────────── */
 .controls {
   position: absolute;
-  bottom: 20px;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px)); /* Safari home bar */
+  bottom: 20px;   /* no env() needed here anymore */
   left: 50%;
   transform: translateX(-50%);
   display: flex;
