@@ -592,8 +592,8 @@ export default {
       const resizeCanvas = () => {
         canvas.width  = 960
         canvas.height = 960
-        canvas.style.width  = video.offsetWidth  + 'px'
-        canvas.style.height = video.offsetHeight + 'px'
+        canvas.style.width  = '960px'
+        canvas.style.height = '960px'
       }
       resizeCanvas()
 
@@ -935,8 +935,8 @@ export default {
   inset: 0;
   width: 960px;
   height: 960px;
-  max-height: 100%;
   max-width: 100%;
+  max-height: 100%;
   object-fit: cover;
   left: 50%;
   top: 50%;
