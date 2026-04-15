@@ -613,8 +613,6 @@ export default {
                   this.modelInputShape
               );
             } else {
-
-
               this.boxes = await detectImageTF(
                   oriented, canvas, this.tfModel,
                   this.topk, this.iouThreshold, this.scoreThreshold,

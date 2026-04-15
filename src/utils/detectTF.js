@@ -110,22 +110,22 @@ export async function detectImageTF(source, canvas, model, topk, iouThreshold, s
     }
 
     // ── 5. Draw on canvas ─────────────────────────────────────────────────────
-    canvas.width = srcW
-    canvas.height = srcH
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, srcW, srcH)
-
-    const scaleX = srcW / modelW
-    const scaleY = srcH / modelH
-
-    for (const box of kept) {
-        const [x1, y1, x2, y2] = box.bounding
-        ctx.strokeStyle = '#ff4d00'   // orange — visually distinct from ONNX yellow
-        ctx.lineWidth = 2
-        ctx.strokeRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY)
-        ctx.fillStyle = 'rgba(255,77,0,0.12)'
-        ctx.fillRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY)
-    }
+    // canvas.width = srcW
+    // canvas.height = srcH
+    // const ctx = canvas.getContext('2d')
+    // ctx.clearRect(0, 0, srcW, srcH)
+    //
+    // const scaleX = srcW / modelW
+    // const scaleY = srcH / modelH
+    //
+    // for (const box of kept) {
+    //     const [x1, y1, x2, y2] = box.bounding
+    //     ctx.strokeStyle = '#ff4d00'   // orange — visually distinct from ONNX yellow
+    //     ctx.lineWidth = 2
+    //     ctx.strokeRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY)
+    //     ctx.fillStyle = 'rgba(255,77,0,0.12)'
+    //     ctx.fillRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY)
+    // }
 
     return kept
 }
