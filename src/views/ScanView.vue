@@ -600,9 +600,11 @@ export default {
           lastFrameTime = timestamp
 
           try {
+            const oriented = this.getOrientedCanvas(video)
+
             if (isOnnx) {
               this.boxes = await detectImage(
-                  video,
+                  oriented,
                   canvas,
                   this.session,
                   this.topk,
@@ -611,8 +613,10 @@ export default {
                   this.modelInputShape
               );
             } else {
+
+
               this.boxes = await detectImageTF(
-                  video, canvas, this.tfModel,
+                  oriented, canvas, this.tfModel,
                   this.topk, this.iouThreshold, this.scoreThreshold,
                   this.tfInputShape   // ✅ was: this.modelInputShape
               )
@@ -804,6 +808,28 @@ export default {
           if (req.url.endsWith('.wasm')) await cache.delete(req)
         }
       }
+    },
+
+    getOrientedCanvas(source) {
+      const sw = source.videoWidth || source.naturalWidth || source.width
+      const sh = source.videoHeight || source.naturalHeight || source.height
+      const isPortrait = sh > sw
+
+      const offscreen = document.createElement('canvas')
+      if (isPortrait) {
+        // rotate 90° so the model sees a landscape frame
+        offscreen.width = sh
+        offscreen.height = sw
+        const ctx = offscreen.getContext('2d')
+        ctx.translate(sh / 2, sw / 2)
+        ctx.rotate(Math.PI / 2)
+        ctx.drawImage(source, -sw / 2, -sh / 2, sw, sh)
+      } else {
+        offscreen.width = sw
+        offscreen.height = sh
+        offscreen.getContext('2d').drawImage(source, 0, 0)
+      }
+      return offscreen
     }
   },
 
