@@ -188,7 +188,7 @@ export default {
       videoStream: null,
 
       // ── model config ──────────────────────────────────────────────────────
-      modelName: 'best_v5.onnx',
+      modelName: 'best_v6.onnx',
       tfModelPath: '/model/tf/model.json',
       modelInputShape: [1, 3, 960, 960],
       topk: 100,
