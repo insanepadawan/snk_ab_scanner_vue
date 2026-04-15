@@ -220,7 +220,6 @@ export default {
   async mounted() {
     env.wasm.numThreads = 1
     env.wasm.proxy = false
-    console.log('wasmPaths:', env)
 
     if (this.abGroup) {
       await this.bootForGroup(this.abGroup)
@@ -323,7 +322,6 @@ export default {
           )
           this.loading.progress = 50
           await this.saveModelToIndexedDB(this.modelName, arrBufNet)
-          console.log('here')
         }
 
         this.loading.progress = 50
@@ -621,7 +619,6 @@ export default {
                   this.scoreThreshold,
                   this.modelInputShape
               );
-              console.log(this.boxes)
             } else {
               this.boxes = await detectImageTF(
                   video, canvas, this.tfModel,
@@ -935,8 +932,6 @@ export default {
   inset: 0;
   width: 960px;
   height: 960px;
-  max-width: 100%;
-  max-height: 100%;
   object-fit: cover;
   left: 50%;
   top: 50%;
@@ -946,9 +941,14 @@ export default {
 .canvas-overlay {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 960px;
+  height: 960px;
+  max-width: 100%;
+  max-height: 100%;
   pointer-events: none;
+  left: 50%;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%);
 }
 
 /* ── Corner brackets ─────────────────────────────────────────────────────── */
