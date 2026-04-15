@@ -1,8 +1,30 @@
 import { Tensor } from "onnxruntime-web";
 
+// Module-level reusable canvases — allocated once, never GC'd
+let preprocessCanvas = null;
+let preprocessCtx = null;
+let videoCanvas = null;
+let videoCtx = null;
 
-let preprocessCanvas = document.createElement("canvas");
-let preprocessCtx = preprocessCanvas.getContext("2d");
+function getPreprocessCanvas(w, h) {
+    if (!preprocessCanvas) {
+        preprocessCanvas = document.createElement("canvas");
+        preprocessCtx = preprocessCanvas.getContext("2d", { willReadFrequently: true });
+    }
+    preprocessCanvas.width = w;
+    preprocessCanvas.height = h;
+    return { canvas: preprocessCanvas, ctx: preprocessCtx };
+}
+
+function getVideoCanvas(w, h) {
+    if (!videoCanvas) {
+        videoCanvas = document.createElement("canvas");
+        videoCtx = videoCanvas.getContext("2d");
+    }
+    videoCanvas.width = w;
+    videoCanvas.height = h;
+    return { canvas: videoCanvas, ctx: videoCtx };
+}
 
 /**
  * Detect objects in image or video without OpenCV
@@ -19,9 +41,8 @@ export const detectImage = async (
     const [modelWidth, modelHeight] = inputShape.slice(2);
 
     let source = imageOrVideo;
-    let offCanvas = null;
 
-    // Handle video frames
+    // Handle video frames — reuse module-level canvas instead of allocating each call
     if (imageOrVideo.tagName === "VIDEO") {
         const videoWidth = imageOrVideo.videoWidth;
         const videoHeight = imageOrVideo.videoHeight;
@@ -31,16 +52,12 @@ export const detectImage = async (
             return [];
         }
 
-        offCanvas = document.createElement("canvas");
-        offCanvas.width = videoWidth;
-        offCanvas.height = videoHeight;
-        const ctx = offCanvas.getContext("2d");
-        ctx.drawImage(imageOrVideo, 0, 0, videoWidth, videoHeight);
-
-        source = offCanvas;
+        const { canvas: vc, ctx: vCtx } = getVideoCanvas(videoWidth, videoHeight);
+        vCtx.drawImage(imageOrVideo, 0, 0, videoWidth, videoHeight);
+        source = vc;
     }
 
-    // Preprocess image using canvas
+    // Preprocess image using reused canvas
     const [inputData, scale, dx, dy] = preprocessingNoCV(source, modelWidth, modelHeight);
 
     const tensor = new Tensor("float32", inputData, inputShape);
@@ -53,7 +70,6 @@ export const detectImage = async (
     let selected = null;
 
     try {
-        // Run inference
         const results = await session.net.run({ images: tensor });
         output0 = results.output0;
 
@@ -61,23 +77,33 @@ export const detectImage = async (
         selected = nmsResults.selected;
 
         const boxes = [];
+        const stride = selected.dims[2];
+
         for (let idx = 0; idx < selected.dims[1]; idx++) {
-            const data = selected.data.slice(idx * selected.dims[2], (idx + 1) * selected.dims[2]);
-            const box = data.slice(0, 4);
-            const scores = data.slice(4);
-            const score = Math.max(...scores);
-            const label = scores.indexOf(score);
+            const offset = idx * stride;
+            const data = selected.data;
 
-            const [x, y, w, h] = [
-                (box[0] - 0.5 * box[2] - dx) / scale,
-                (box[1] - 0.5 * box[3] - dy) / scale,
-                box[2] / scale,
-                box[3] / scale,
-            ];
+            const box0 = data[offset];
+            const box1 = data[offset + 1];
+            const box2 = data[offset + 2];
+            const box3 = data[offset + 3];
 
-            if (score >= 0.7) {
-                boxes.push({ label, probability: score, bounding: [x, y, w, h] });
+            // Single-pass argmax over scores instead of Math.max(...) + indexOf
+            let score = -Infinity;
+            let label = 0;
+            for (let c = 4; c < stride; c++) {
+                const s = data[offset + c];
+                if (s > score) { score = s; label = c - 4; }
             }
+
+            if (score < 0.7) continue;
+
+            const x = (box0 - 0.5 * box2 - dx) / scale;
+            const y = (box1 - 0.5 * box3 - dy) / scale;
+            const w = box2 / scale;
+            const h = box3 / scale;
+
+            boxes.push({ label, probability: score, bounding: [x, y, w, h] });
         }
 
         return boxes;
@@ -86,20 +112,16 @@ export const detectImage = async (
         config.dispose();
         if (output0) output0.dispose();
         if (selected) selected.dispose();
-
-        if (offCanvas) {
-            offCanvas.width = 0;
-            offCanvas.height = 0;
-        }
+        // No canvas cleanup needed — module-level canvases are reused
     }
 };
 
 /**
- * Preprocess image without OpenCV
+ * Preprocess image without OpenCV.
+ * Uses { willReadFrequently: true } context and skips the trailing clearRect.
  */
 export const preprocessingNoCV = (image, modelWidth, modelHeight) => {
-    preprocessCanvas.width = modelWidth;
-    preprocessCanvas.height = modelHeight;
+    const { ctx } = getPreprocessCanvas(modelWidth, modelHeight);
 
     const scale = Math.min(modelWidth / image.width, modelHeight / image.height);
     const scaledWidth = Math.round(image.width * scale);
@@ -107,24 +129,24 @@ export const preprocessingNoCV = (image, modelWidth, modelHeight) => {
     const dx = Math.floor((modelWidth - scaledWidth) / 2);
     const dy = Math.floor((modelHeight - scaledHeight) / 2);
 
-    preprocessCtx.fillStyle = "black";
-    preprocessCtx.fillRect(0, 0, modelWidth, modelHeight);
-    preprocessCtx.drawImage(image, dx, dy, scaledWidth, scaledHeight);
+    // Fill letterbox with black, then draw scaled image
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, modelWidth, modelHeight);
+    ctx.drawImage(image, dx, dy, scaledWidth, scaledHeight);
 
-    const { data, width, height } = preprocessCtx.getImageData(0, 0, modelWidth, modelHeight);
+    const { data, width, height } = ctx.getImageData(0, 0, modelWidth, modelHeight);
     const tensorData = new Float32Array(3 * width * height);
+    const pixelCount = width * height;
 
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            const idx = (y * width + x) * 4;
-            const base = y * width + x;
-            tensorData[base] = data[idx] / 255.0;
-            tensorData[base + width * height] = data[idx + 1] / 255.0;
-            tensorData[base + 2 * width * height] = data[idx + 2] / 255.0;
-        }
+    // Unrolled channel-planar copy: R plane, G plane, B plane
+    for (let i = 0; i < pixelCount; i++) {
+        const src = i * 4;
+        tensorData[i]                  = data[src]     / 255.0;
+        tensorData[i + pixelCount]     = data[src + 1] / 255.0;
+        tensorData[i + 2 * pixelCount] = data[src + 2] / 255.0;
     }
 
-    preprocessCtx.clearRect(0, 0, modelWidth, modelHeight);
+    // No clearRect — next call overwrites with fillRect anyway
     return [tensorData, scale, dx, dy];
 };
 

@@ -45,9 +45,9 @@
 
       <!-- Loading -->
       <Loader
-        v-if="loading"
-        :text="loading.text"
-        :progress="loading.progress"
+          v-if="loading"
+          :text="loading.text"
+          :progress="loading.progress"
       />
 
       <!-- Error -->
@@ -67,23 +67,23 @@
       <template v-else>
         <!-- Video feed -->
         <video
-          v-if="useWebcam"
-          ref="videoRef"
-          class="feed"
-          autoplay
-          playsinline
-          muted
-          @play="onVideoPlay"
+            v-if="useWebcam"
+            ref="videoRef"
+            class="feed"
+            autoplay
+            playsinline
+            muted
+            @play="onVideoPlay"
         />
 
         <!-- Static image -->
         <img
-          v-if="image"
-          ref="imageRef"
-          class="feed"
-          :src="image"
-          @load="onImageLoad"
-          alt="scan target"
+            v-if="image"
+            ref="imageRef"
+            class="feed"
+            :src="image"
+            @load="onImageLoad"
+            alt="scan target"
         />
 
         <!-- Overlay canvas -->
@@ -129,11 +129,11 @@
 
     <!-- hidden file input -->
     <input
-      ref="inputImage"
-      type="file"
-      accept="image/*"
-      style="display:none"
-      @change="onFileChange"
+        ref="inputImage"
+        type="file"
+        accept="image/*"
+        style="display:none"
+        @change="onFileChange"
     />
   </div>
 </template>
@@ -170,7 +170,7 @@ export default {
   data() {
     return {
       // ── A/B ──────────────────────────────────────────────────────────────
-      abGroup: readAbGroup(),  // 'onnx' | 'tf' | null
+      abGroup: readAbGroup(),   // 'onnx' | 'tf' | null
       showPanel: false,
       showLog: false,
 
@@ -195,11 +195,13 @@ export default {
       iouThreshold: 0.45,
       scoreThreshold: 0.25,
 
-      // ── detection ─────────────────────────────────────────────────────────
-      boxes: [],
+      // ── detection (reactive minimum) ──────────────────────────────────────
+      // Only `detected` needs to be reactive — it drives the badge in the template.
+      // `_boxes` and `_tickTimer` are plain instance properties (no Vue tracking).
       detected: null,
+
+      // ── boot helpers ──────────────────────────────────────────────────────
       saving: false,
-      rafId: null,
       retryCount: 0,
       maxRetries: 5,
       tensor: null,
@@ -220,6 +222,14 @@ export default {
   async mounted() {
     env.wasm.numThreads = 1
     env.wasm.proxy = false
+
+    // Plain (non-reactive) instance properties used in the hot detection path.
+    // Keeping these off Vue's reactivity system avoids proxy overhead and
+    // prevents unneeded re-renders on every frame.
+    this._boxes = []
+    this._tickTimer = null
+    this._tickRunning = false
+    this._predictedCount = {}
 
     if (this.abGroup) {
       await this.bootForGroup(this.abGroup)
@@ -245,7 +255,8 @@ export default {
       this.loading = { text: this.$t('Открываем камеру...'), progress: 0 }
       this.error = null
       this.detected = null
-      this.boxes = []
+      this._boxes = []
+      this._predictedCount = {}
 
       if (group === 'onnx') {
         await this.bootOnnx()
@@ -255,11 +266,12 @@ export default {
     },
 
     // ── ONNX boot ─────────────────────────────────────────────────────────────
+
     async bootOnnx() {
       try {
-        const wasmBinary = await this.downloadWasmBinary();
-        env.wasm.wasmBinary = wasmBinary;
-        await env.wasm.wasmReady;
+        const wasmBinary = await this.downloadWasmBinary()
+        env.wasm.wasmBinary = wasmBinary
+        await env.wasm.wasmReady
       } catch (err) {
         console.error('WASM download failed:', err)
         this.error = `Failed to download WASM: ${err.message}`
@@ -317,8 +329,8 @@ export default {
         if (!arrBufNet) {
           this.loading.progress = 40
           arrBufNet = await download(
-            `${baseModelURL}/${this.modelName}?ts=${ts}`,
-            f => { this.loading.progress = 40 + Math.round(f * 10) }
+              `${baseModelURL}/${this.modelName}?ts=${ts}`,
+              f => { this.loading.progress = 40 + Math.round(f * 10) }
           )
           this.loading.progress = 50
           await this.saveModelToIndexedDB(this.modelName, arrBufNet)
@@ -345,9 +357,9 @@ export default {
         this.loading.progress = 65
 
         this.tensor = new Tensor(
-          'float32',
-          new Float32Array(this.modelInputShape.reduce((a, b) => a * b)),
-          this.modelInputShape
+            'float32',
+            new Float32Array(this.modelInputShape.reduce((a, b) => a * b)),
+            this.modelInputShape
         )
         await yolov26.run({ images: this.tensor })
         this.loading.progress = 70
@@ -373,8 +385,6 @@ export default {
     async bootTF() {
       try {
         await nextTick()
-        // ✅ Match ONNX's 500ms deferral — lets Vue's scheduler and the router
-        //    fully settle before TF.js touches the engine
         await new Promise(resolve => setTimeout(resolve, 500))
         await this.loadTFModel()
         if (this.tfModel) await this.startWebcam()
@@ -442,15 +452,14 @@ export default {
 
         this.loading.progress = 85
 
-        // ✅ Single ModelArtifacts object — new API
         const model = await tf.loadGraphModel(
             tf.io.fromMemory({
               modelTopology: modelJson.modelTopology,
               weightSpecs,
-              weightData:   merged.buffer,
-              format:       modelJson.format,
-              generatedBy:  modelJson.generatedBy,
-              convertedBy:  modelJson.convertedBy,
+              weightData:  merged.buffer,
+              format:      modelJson.format,
+              generatedBy: modelJson.generatedBy,
+              convertedBy: modelJson.convertedBy,
             })
         )
 
@@ -458,7 +467,6 @@ export default {
         this.loading.progress = 95
         this.tfInputShape = this.tfModel.inputs[0].shape
 
-        // ✅ execute() — no control flow in this graph
         const dummy = tf.zeros(this.tfInputShape)
         const result = this.tfModel.execute(dummy)
         dummy.dispose()
@@ -486,7 +494,7 @@ export default {
       try {
         const cached = await db.get('binaries', key)
         if (cached) {
-          console.log('✅ Loaded WASM from cache');
+          console.log('✅ Loaded WASM from cache')
           this.loading.progress = 25
           return cached
         }
@@ -498,8 +506,8 @@ export default {
       }
 
       const arrayBuffer = await download(
-        wasmUrl,
-        f => { this.loading.progress = Math.min(25, Math.round(f * 25)) }
+          wasmUrl,
+          f => { this.loading.progress = Math.min(25, Math.round(f * 25)) }
       )
       this.loading.progress = 25
 
@@ -554,7 +562,7 @@ export default {
 
     async onImageLoad() {
       if (this.abGroup === 'onnx' && this.session) {
-        this.boxes = await detectImage(
+        this._boxes = await detectImage(
             this.$refs.imageRef,
             this.$refs.canvasRef,
             this.session,
@@ -562,97 +570,146 @@ export default {
             this.iouThreshold,
             this.scoreThreshold,
             this.modelInputShape
-        );
+        )
       } else if (this.abGroup === 'tf' && this.tfModel) {
-        this.boxes = await detectImageTF(
-            this.$refs.imageRef, this.$refs.canvasRef,
-            this.tfModel, this.topk, this.iouThreshold, this.scoreThreshold,
-            this.tfInputShape   // ✅ was: this.modelInputShape
+        this._boxes = await detectImageTF(
+            this.$refs.imageRef,
+            this.$refs.canvasRef,
+            this.tfModel,
+            this.topk,
+            this.iouThreshold,
+            this.scoreThreshold,
+            this.tfInputShape
         )
       }
 
-      if (this.boxes.length > 0) {
-        this.detected = labels[this.boxes[0].label]
+      if (this._boxes.length > 0) {
+        this.detected = labels[this._boxes[0].label]
         if (this.detected !== 'old') await this.saveResults(this.detected)
       }
     },
 
     // ── Detection: webcam loop ────────────────────────────────────────────────
+    // Uses setInterval instead of requestAnimationFrame so a slow inference call
+    // never stacks frames — the next tick is always a fixed 500 ms after the
+    // *previous tick starts*, not after it resolves.  The `_tickRunning` guard
+    // drops ticks that arrive while inference is still in progress.
 
     async onVideoPlay() {
       const isOnnx = this.abGroup === 'onnx'
       if (isOnnx && !this.session) return
       if (!isOnnx && !this.tfModel) return
 
-      const video = this.$refs.videoRef
-      const canvas = this.$refs.canvasRef
-      const frameInterval = 1000 / 2
-      let lastFrameTime = 0
-      let predictedCount = {}
-      let lockTrigger = false
-      const stableThreshold = 6
       const minConfidence = 0.82
+      const stableThreshold = 6
 
-      const loop = async timestamp => {
-        if (video.paused || video.ended) return
+      const tick = async () => {
+        if (this._tickRunning) return
+        const video = this.$refs.videoRef
+        if (!video || video.paused || video.ended) return
 
-        if (timestamp - lastFrameTime >= frameInterval) {
-          lastFrameTime = timestamp
+        this._tickRunning = true
+        try {
+          const oriented = this._getOrientedFrame(video)
 
-          try {
-            const oriented = this.getOrientedCanvas(video)
-
-            if (isOnnx) {
-              this.boxes = await detectImage(
-                  oriented,
-                  canvas,
-                  this.session,
-                  this.topk,
-                  this.iouThreshold,
-                  this.scoreThreshold,
-                  this.modelInputShape
-              );
-            } else {
-              this.boxes = await detectImageTF(
-                  oriented, canvas, this.tfModel,
-                  this.topk, this.iouThreshold, this.scoreThreshold,
-                  this.tfInputShape   // ✅ was: this.modelInputShape
-              )
-            }
-          } catch (e) {
-            console.warn('Detection frame error:', e)
+          if (isOnnx) {
+            this._boxes = await detectImage(
+                oriented,
+                this.$refs.canvasRef,
+                this.session,
+                this.topk,
+                this.iouThreshold,
+                this.scoreThreshold,
+                this.modelInputShape
+            )
+          } else {
+            this._boxes = await detectImageTF(
+                oriented,
+                this.$refs.canvasRef,
+                this.tfModel,
+                this.topk,
+                this.iouThreshold,
+                this.scoreThreshold,
+                this.tfInputShape
+            )
           }
 
-          if (this.boxes.length > 0) {
-            const top = this.boxes[0]
+          if (this._boxes.length > 0) {
+            const top = this._boxes[0]
             const label = labels[top.label]
             const score = top.probability || 0
 
             if (score >= minConfidence) {
-              predictedCount[label] = (predictedCount[label] || 0) + 1
-              for (const l in predictedCount) if (l !== label) predictedCount[l] = 0
+              this._predictedCount[label] = (this._predictedCount[label] || 0) + 1
 
-              if (!lockTrigger && predictedCount[label] >= stableThreshold) {
+              // Reset counts for all other labels
+              for (const l in this._predictedCount) {
+                if (l !== label) this._predictedCount[l] = 0
+              }
+
+              if (this._predictedCount[label] >= stableThreshold) {
                 this.detected = label
                 if (this.detected !== 'old') {
+                  this._stopTick()
                   if (isOnnx) await cleanupSessions(this.session)
                   await this.saveResults(this.detected)
-                  lockTrigger = true
                   return
                 }
               }
             } else {
-              predictedCount[label] = 0
+              this._predictedCount[label] = 0
             }
           } else {
-            predictedCount = {}
+            // Clear counts without allocating a new object
+            for (const k in this._predictedCount) this._predictedCount[k] = 0
           }
+        } catch (e) {
+          console.warn('Detection tick error:', e)
+        } finally {
+          this._tickRunning = false
         }
-
-        this.rafId = requestAnimationFrame(loop)
       }
 
-      this.rafId = requestAnimationFrame(loop)
+      this._tickTimer = setInterval(tick, 500)
+    },
+
+    // Reuses a single module-level offscreen canvas (created once in mounted)
+    // instead of allocating a new DOM element every frame.
+    _getOrientedFrame(video) {
+      const sw = video.videoWidth
+      const sh = video.videoHeight
+      const isPortrait = sh > sw
+
+      if (!this._offscreenCanvas) {
+        this._offscreenCanvas = document.createElement('canvas')
+        this._offscreenCtx = this._offscreenCanvas.getContext('2d')
+      }
+
+      const canvas = this._offscreenCanvas
+      const ctx = this._offscreenCtx
+
+      if (isPortrait) {
+        canvas.width = sh
+        canvas.height = sw
+        // Single setTransform call instead of translate + rotate
+        ctx.setTransform(0, 1, -1, 0, sh, 0)
+        ctx.drawImage(video, 0, 0, sw, sh)
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+      } else {
+        canvas.width = sw
+        canvas.height = sh
+        ctx.drawImage(video, 0, 0)
+      }
+
+      return canvas
+    },
+
+    _stopTick() {
+      if (this._tickTimer) {
+        clearInterval(this._tickTimer)
+        this._tickTimer = null
+      }
+      this._tickRunning = false
     },
 
     // ── Media helpers ─────────────────────────────────────────────────────────
@@ -690,7 +747,8 @@ export default {
     },
 
     closeMedia() {
-      if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null }
+      this._stopTick()
+
       if (this.image) { URL.revokeObjectURL(this.image); this.image = null }
       if (this.videoStream) {
         this.videoStream.getTracks().forEach(t => t.stop())
@@ -711,9 +769,10 @@ export default {
           this.tfModel.dispose()
           this.tfModel = null
         }
-        this.boxes = []
+        this._boxes = []
         this.detected = null
         this.tensor = null
+        this._predictedCount = {}
         this.closeMedia()
       } catch (err) {
         console.warn('releaseResources failed:', err)
@@ -738,8 +797,9 @@ export default {
       this.closeMedia()
       await this.release()
       if (this.tensor) { this.tensor.data = null; this.tensor = null }
-      this.boxes = []
+      this._boxes = []
       this.detected = null
+      this._predictedCount = {}
       this.retryCount++
 
       if (this.retryCount < this.maxRetries) {
@@ -755,19 +815,18 @@ export default {
       if (this.saving) return
       this.saving = true
 
-      // Local A/B tracking
       logAbEvent(this.abGroup, payload)
 
       const layer = {
-        corner: 'corner',
-        foooul: 'foooul',
-        goaaaal: 'goaaaal',
-        handball: 'handball',
-        offside: 'offside',
-        own_goal: 'own_goal',
-        penalty: 'penalty',
-        red_card: 'red_card',
-        vaaaar: 'vaaaar'
+        corner:    'corner',
+        foooul:    'foooul',
+        goaaaal:   'goaaaal',
+        handball:  'handball',
+        offside:   'offside',
+        own_goal:  'own_goal',
+        penalty:   'penalty',
+        red_card:  'red_card',
+        vaaaar:    'vaaaar'
       }
 
       if (payload !== 'old') {
@@ -807,28 +866,6 @@ export default {
         }
       }
     },
-
-    getOrientedCanvas(source) {
-      const sw = source.videoWidth || source.naturalWidth || source.width
-      const sh = source.videoHeight || source.naturalHeight || source.height
-      const isPortrait = sh > sw
-
-      const offscreen = document.createElement('canvas')
-      if (isPortrait) {
-        // rotate 90° so the model sees a landscape frame
-        offscreen.width = sh
-        offscreen.height = sw
-        const ctx = offscreen.getContext('2d')
-        ctx.translate(sh / 2, sw / 2)
-        ctx.rotate(Math.PI / 2)
-        ctx.drawImage(source, -sw / 2, -sh / 2, sw, sh)
-      } else {
-        offscreen.width = sw
-        offscreen.height = sh
-        offscreen.getContext('2d').drawImage(source, 0, 0)
-      }
-      return offscreen
-    }
   },
 
   beforeUnmount() {
@@ -836,6 +873,7 @@ export default {
   }
 }
 </script>
+
 
 <style scoped>
 .scan-page {
